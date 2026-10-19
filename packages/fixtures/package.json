@@ -1,0 +1,23 @@
+{
+  "name": "@patchback/fixtures",
+  "version": "0.1.0",
+  "description": "Benchmark testbed of real-world CVEs, patches, and PR regression scenarios",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@patchback/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
