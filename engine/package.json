@@ -1,0 +1,10 @@
+{
+  "name": "patchback-engine",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "checker.js",
+  "dependencies": {
+    "@babel/parser": "^7.26.9",
+    "@babel/traverse": "^7.26.9"
+  }
+}

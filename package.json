@@ -1,26 +1,22 @@
 {
-  "name": "patchback-monorepo",
+  "name": "patchback",
   "version": "0.1.0",
+  "description": "Security Regression Intelligence for Open-Source Packages",
   "private": true,
-  "description": "PATCHBACK: Security Regression Intelligence for Open-Source Packages",
-  "workspaces": [
-    "packages/*"
-  ],
+  "type": "module",
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "benchmark": "npm run benchmark -w @patchback/core",
-    "web": "npm run dev -w @patchback/web",
-    "cli": "node packages/cli/dist/index.js"
+    "engine:test": "node engine/test-demo.js",
+    "benchmark": "node pitch-and-benchmark/benchmark-runner.js",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:install": "cd frontend && npm install"
   },
   "keywords": [
     "security",
-    "regression",
     "ast",
-    "invariants",
+    "regression",
     "cve",
-    "static-analysis"
+    "patchback"
   ],
-  "author": "PATCHBACK Team",
+  "author": "PATCHBACK Team (FET Hackathon)",
   "license": "Apache-2.0"
 }
