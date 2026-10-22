@@ -10,14 +10,14 @@
 
 | Member | Role | Assigned Folder | Your Branch Name |
 | :--- | :--- | :--- | :--- |
-| **Lead (You)** | Core Engine & AST Analyzer | `engine/` | `main` |
+| **Shashank** | Core Engine & AST Analyzer | `engine/` | `main` |
 | **Suhani** | Security Testbed & CVE Scenarios | `scenarios/` | `feature/scenarios` |
 | **Sanjana** | Frontend & Interactive UI | `frontend/` | `feature/frontend` |
 | **Nikitah** | Integration, Benchmark & Pitch | `pitch-and-benchmark/` | `feature/pitch-benchmark` |
 
 ---
 
-## 🚀 How to Get Started (For Suhani, Sanjana & Nikitah)
+## 🚀 How to Get Started
 
 ### Step 1: Clone the repository to your laptop
 ```bash
