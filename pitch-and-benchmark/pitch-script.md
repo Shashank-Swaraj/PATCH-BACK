@@ -1,35 +1,24 @@
-# 🎤 3-Minute Hackathon Pitch Script
+# 🎤 3-Minute Presentation Script Template
 
-**Owner:** Nikitah (`feature/pitch-benchmark` branch)
+**Assigned to:** Nikitah (`feature/pitch-benchmark` branch)
 
----
-
-### [0:00 - 0:45] The Hook & Problem (Nikitah)
-> "Good afternoon judges! In July 2024, the world was shocked by a vulnerability named **regreSSHion** in OpenSSH. 
-> 
-> What made it shocking was that the bug was originally discovered and fixed in **2006**. But in October 2020, an innocent code refactor accidentally removed the safety check. For **nearly four years**, millions of servers were left wide open to remote code execution because of a simple refactor.
-> 
-> Today, tools like Dependabot only look at package versions. CodeQL only flags known generic patterns. And human reviewers only see isolated diffs without historical context. Nobody remembers *why* that safety line was added."
+Use this outline to write our team's 3-minute pitch script for the AVISHKAR judges:
 
 ---
 
-### [0:45 - 1:30] The Solution & Innovation (Lead / You)
-> "That’s why we built **PATCHBACK**—Security Regression Intelligence for open-source repositories.
-> 
-> PATCHBACK gives your codebase an institutional security memory. When a security patch is committed, PATCHBACK extracts the defense as a **Typed Security Invariant**—for example, *'Whenever sendFile is called, it must be guarded by startsWith(root)'*.
-> 
-> Crucially, our philosophy is: **'The LLM proposes the invariant, but deterministic code decides the PR verdict.'** We run pure AST static analysis in CI with zero hallucinations, catching regressions in under 10 milliseconds."
+### Part 1: The Problem Hook (45 seconds) — Speaker: Nikitah
+- Introduce the real-world **regreSSHion** OpenSSH story (vulnerability patched in 2006, accidentally undone in a 2020 refactor, unnoticed for 4 years).
+- Explain why Dependabot and CodeQL fail (Dependabot only reads `package.json` versions; CodeQL has no repo memory).
 
----
+### Part 2: The Solution & Technical Architecture (45 seconds) — Speaker: Lead
+- Introduce **PATCHBACK**: Security Regression Intelligence for open source.
+- Explain our thesis: *"LLM proposes the invariant, but deterministic code decides the PR verdict."*
+- How it runs in CI in < 10ms with zero hallucinations.
 
-### [1:30 - 2:30] Live Demo & Scenarios (Sanjana & Suhani)
-> **(Suhani):** "I built our real-world vulnerability testbed. Here is an Express file server where a 2022 patch added a path traversal guard. In PR #412, a junior developer extracted a helper function, creating a new route that skips the guard."
-> 
-> **(Sanjana):** "In our live dashboard, when the developer opens the PR, PATCHBACK immediately intercepts it. With one click, it proves the path from route to sink, identifies the missing guard on Line 3, and generates the exact GitHub Action comment blocking the merge."
+### Part 3: Live Demo (60 seconds) — Speakers: Suhani & Sanjana
+- Suhani explains the scenario being tested (Express file server).
+- Sanjana shows the live UI: clicking "Run Invariant Check" and showing the red alert on the missing guard.
 
----
-
-### [2:30 - 3:00] Benchmark & Conclusion (Nikitah)
-> "In our benchmark evaluation across seeded regressions and clean refactors, PATCHBACK achieved a **100% detection rate** with **0% false positives** on benign cleanups, taking just **4.2 milliseconds** per PR.
-> 
-> PATCHBACK: *Remember the fix. Protect the future.* Thank you, and we welcome your questions!"
+### Part 4: Benchmark & Conclusion (30 seconds) — Speaker: Nikitah
+- Present the scorecard: 100% detection rate on regressions, 0% false alarms on benign cleanups.
+- Close with tagline: *"PATCHBACK: Remember the fix. Protect the future."*

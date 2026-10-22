@@ -1,20 +1,27 @@
-# 💻 Frontend & Interactive Dashboard (`frontend/`)
+# 💻 Frontend UI & Dashboard
 
-**Owner:** Sanjana (`feature/frontend` branch)
+**Assigned to:** Sanjana (`feature/frontend` branch)
 
-## What this module does:
-This is the interactive visual presentation dashboard that the hackathon judges will see during our live demo. It lets users:
-1. Select a security scenario (Path Traversal, Command Injection, Benign Cleanup).
-2. Compare the historical security fix vs. the incoming refactoring PR.
-3. Click **"Run PATCHBACK Invariant Check"** to simulate the scan live.
-4. See the red alert banner, the broken line number, and copy the simulated GitHub Action comment!
+## Your Task (Build from Scratch):
+Build the interactive web dashboard that our team will show to the judges during our presentation.
 
-## How to run the frontend on your laptop:
-1. Open terminal inside the `frontend` folder:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-2. Open your browser at `http://localhost:5173`.
-3. Feel free to tweak the UI, colors, layout, and styling!
+### Requirements:
+1. **Scenario Picker:** Let the user pick between test scenarios (e.g. Express Path Traversal, Command Injection, Clean PR).
+2. **Code Display:** Show:
+   - What the past security fix looked like (with the guard).
+   - What the new Pull Request looks like (where the guard was removed or bypassed).
+3. **Scan Button:** A big button: *"Run PATCHBACK Invariant Check"*.
+4. **Alert / Verdict:**
+   - If a regression is detected: Show a **Red Alert** with the broken line number and the missing guard.
+   - If clean: Show a **Green Pass** badge.
+   - A button to copy the simulated GitHub PR comment.
+
+---
+
+## How to Run & Work on Your Laptop:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open `http://localhost:5173` in your browser. Edit `src/App.jsx` to build the UI!
