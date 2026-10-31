@@ -237,46 +237,80 @@ function Login({ onLogin }) {
   }
 
   return (
-    <div className="login-shell">
-      <div className="login-backdrop">
-        <div className="login-intro">
-          <div className="logo-row"><Brand /></div>
-          <h1>Security Regression Intelligence</h1>
-          <p>Remember past security fixes. Prevent refactoring from silently re-opening CVE vulnerabilities in Pull Requests.</p>
-          <div className="feature-list">
-            <div><span><Layers /></span>Track historical security fixes (Invariants)</div>
-            <div><span><Code2 /></span>AST control-flow reachability analysis</div>
-            <div><span><ShieldCheck /></span>Block regressions in CI in &lt; 10ms</div>
+    <div className="login-page">
+      <div className="login-intro">
+        <Brand />
+        <div className="intro-rule" />
+        <h1>
+          Security Regression <span>Intelligence</span>
+        </h1>
+        <p className="intro-copy">
+          Remember past security fixes. Detect when new changes undo them.
+        </p>
+        <div className="login-points">
+          <div>
+            <span><Layers size={24} /></span>
+            <div>Track historical security fixes (Invariants)</div>
+          </div>
+          <div>
+            <span><Code2 size={24} /></span>
+            <div>AST control-flow reachability analysis</div>
+          </div>
+          <div>
+            <span><ShieldCheck size={24} /></span>
+            <div>Block regressions in CI in &lt; 10ms</div>
           </div>
         </div>
+        <div className="login-wave" />
+      </div>
 
+      <div className="login-form-side">
         <div className="login-card">
-          <div className="card-top">
-            <span className="sub-logo"><Brand compact /></span>
-            <h2>Sign In to Console</h2>
-            <p>Access the live PR regression simulator & AST engine.</p>
-          </div>
+          <Brand compact />
+          <h2>Welcome Back</h2>
+          <p className="login-subtitle">
+            Log in to analyze code changes and track security regressions.
+          </p>
 
           <form onSubmit={submit} className="login-form">
             <label htmlFor="userId">User ID</label>
             <div className="input-wrap">
               <UserRound size={17} />
-              <input id="userId" value={userId} onChange={e => setUserId(e.target.value)} required />
+              <input
+                id="userId"
+                value={userId}
+                onChange={e => setUserId(e.target.value)}
+                required
+              />
             </div>
 
             <label htmlFor="password">Password</label>
             <div className="input-wrap">
               <LockKeyhole size={17} />
-              <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required />
-              <button type="button" className="icon-action" onClick={() => setShowPassword(!showPassword)}>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="icon-action"
+                onClick={() => setShowPassword(!showPassword)}
+              >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
 
             {error && <div className="login-error">{error}</div>}
 
-            <button type="submit" className="primary-button login-button" disabled={loading}>
-              {loading ? 'Authenticating...' : 'Launch Demo Console'} <ArrowRight size={17} />
+            <button
+              type="submit"
+              className="primary-button login-button"
+              disabled={loading}
+            >
+              {loading ? 'Authenticating...' : 'Log In →'}
             </button>
           </form>
         </div>
