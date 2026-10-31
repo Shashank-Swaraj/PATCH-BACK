@@ -323,10 +323,11 @@ function Navbar({ page, setPage, user, onLogout }) {
   const [open, setOpen] = useState(false);
 
   const navLinks = [
-    { id: 'analyze', label: 'PR Simulator' },
-    { id: 'benchmark', label: 'Benchmark Scorecard' },
-    { id: 'about', label: 'System Architecture' }
-  ];
+  { id: 'analyze', label: 'PR Simulator' },
+  { id: 'history', label: 'Analysis History' },
+  { id: 'benchmark', label: 'Benchmark Scorecard' },
+  { id: 'about', label: 'System Architecture' }
+  ];  
 
   return (
     <header className="topbar">
@@ -377,6 +378,125 @@ function ResultBadge({ result }) {
     </span>
   );
 }
+
+
+function HistoryPage() {
+  const [analyses, setAnalyses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  async function loadHistory() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(
+        'http://localhost:4000/api/history',
+        { credentials: 'include' }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Could not load history');
+      }
+
+      setAnalyses(data.analyses || []);
+    } catch (err) {
+      setError(err.message || 'Failed to load history');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  return (
+    <div className="page-content inner-page">
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">SECURITY SCAN RECORDS</div>
+          <h1>Analysis History</h1>
+          <p>Review your previously analyzed pull requests and security verdicts.</p>
+        </div>
+
+        <button
+          className="primary-button"
+          onClick={loadHistory}
+          disabled={loading}
+        >
+          {loading ? 'Refreshing...' : 'Refresh History'}
+        </button>
+      </div>
+
+      <section className="panel benchmark-table-panel">
+        <div className="panel-heading">
+          <h2>Previous Analyses</h2>
+          <span className="demo-pill">
+            {analyses.length} RECORDS
+          </span>
+        </div>
+
+        {error && (
+          <p style={{ color: '#ff7b82', padding: '16px' }}>{error}</p>
+        )}
+
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Verdict</th>
+                <th>Violations</th>
+                <th>Latency</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5}>Loading analysis history...</td>
+                </tr>
+              ) : analyses.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>No saved analyses found.</td>
+                </tr>
+              ) : (
+                analyses.map(item => (
+                  <tr key={item._id}>
+                    <td>
+                      <strong>
+                        {item.scenarioName || 'Custom Analysis'}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <ResultBadge result={item.verdict} />
+                    </td>
+
+                    <td>{item.violations?.length || 0}</td>
+
+                    <td>{item.latencyMs ?? 0} ms</td>
+
+                    <td>
+                      {item.createdAt
+                        ? new Date(item.createdAt).toLocaleString()
+                        : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 
 function Dashboard({ setPage }) {
   return (
@@ -499,10 +619,12 @@ function Analyze() {
       const response = await fetch('http://localhost:4000/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           code: scenario.pr,
           sink: scenario.sink,
-          guard: scenario.guard
+          guard: scenario.guard,
+          scenarioName: scenario.name
         })
       });
 
@@ -820,6 +942,7 @@ export default function App() {
       <main className="main-content">
         {page === 'home' && <Dashboard setPage={setPage} />}
         {page === 'analyze' && <Analyze />}
+        {page === 'history' && <HistoryPage />}
         {page === 'benchmark' && <Benchmark />}
         {page === 'about' && <About />}
       </main>

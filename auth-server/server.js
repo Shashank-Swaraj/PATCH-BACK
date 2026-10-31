@@ -13,6 +13,9 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+const connectDB = require('./database');
+const Analysis = require('./models/Analysis');
+
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   cors({
@@ -127,29 +130,78 @@ function getChecker() {
   return checkerModulePromise;
 }
 
-app.post('/api/analyze', async (req, res) => {
+
+app.post('/api/analyze', authenticate, async (req, res) => {
   try {
-    const { code, sink, guard } = req.body;
+    const { code, sink, guard, scenarioName } = req.body;
 
     if (!code || typeof code !== 'string') {
-      return res.status(400).json({ message: 'Invalid code payload.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid code payload.'
+      });
     }
 
     const { checkSecurityInvariant } = await getChecker();
-    const result = checkSecurityInvariant(code, sink || '', guard || '');
+
+    // Run the actual security checker
+    const result = checkSecurityInvariant(
+      code,
+      sink || '',
+      guard || ''
+    );
+
+    // Save the actual result in MongoDB
+    const savedAnalysis = await Analysis.create({
+      userId: req.user.userId,
+      scenarioName: scenarioName || 'Custom Analysis',
+      sink: sink || '',
+      guard: guard || '',
+      verdict: result.verdict,
+      violations: result.violations,
+      latencyMs: result.latencyMs
+    });
 
     return res.json({
       success: true,
       analysis: result,
+      analysisId: savedAnalysis._id
     });
+
   } catch (error) {
     console.error('AST Analysis Error:', error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message
     });
   }
 });
+
+
+app.get('/api/history', authenticate, async (req, res) => {
+  try {
+    const analyses = await Analysis.find({
+      userId: req.user.userId
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    res.json({
+      success: true,
+      analyses
+    });
+  } catch (error) {
+    console.error('History fetch failed:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch analysis history'
+    });
+  }
+});
+
 
 // -------------------------------------------------------------
 // Scenarios Benchmark Endpoint
@@ -208,6 +260,14 @@ app.get('/api/benchmark', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`PATCHBACK Security & Auth Server running on http://localhost:${PORT}`);
-});
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(
+        `PATCHBACK Security & Auth Server running on http://localhost:${PORT}`
+      );
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to start PATCHBACK:', error);
+  });
