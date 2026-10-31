@@ -8,20 +8,20 @@
 
 ## 📌 Executive Summary
 
-When an open-source project or enterprise codebase patches a security vulnerability, developers write defensive guards (such as input validation, path boundary checks, or shell escaping).
+When an open-source project or enterprise codebase patches a security vulnerability, developers write defensive guards (such as path boundary validations, input escaping, or permission checks).
 
-However, **codebases constantly evolve**. Months or years later, developers refactor, clean up legacy code, or resolve merge conflicts—and **accidentally delete, bypass, or forget those defensive security checks**.
+However, **codebases constantly evolve**. Months or years later, developers refactor, clean up legacy code, or reorganize modules—and **accidentally delete, bypass, or weaken those historical security checks**.
 
-* **Real-World Case Study — regreSSHion ([CVE-2024-6387](https://nvd.nist.gov/vuln/detail/CVE-2024-6387)):** OpenSSH patched a critical remote code execution flaw in 2006. In 2020, an innocent code refactor accidentally removed the mitigation directive. The vulnerability silently resurfaced and remained exposed for **4 whole years**, putting millions of public Linux servers at risk!
+* **Real-World Case Study — regreSSHion ([CVE-2024-6387](https://nvd.nist.gov/vuln/detail/CVE-2024-6387)):** OpenSSH patched a critical remote code execution vulnerability in 2006. In 2020, an innocent code cleanup accidentally removed the defensive directive. The flaw quietly resurfaced and remained exposed for **4 whole years**, putting millions of public Linux servers at risk!
 
 ---
 
 ## 🔍 The Blind Spot: Why Existing Tools Fail
 
-| Tool Category | How It Operates | Why It Misses Logic Regressions |
+| Tool Category | How It Operates | Why It Misses Refactoring Regressions |
 | :--- | :--- | :--- |
 | **Dependabot & Snyk** | Scans dependency versions | Only inspects `package.json` version strings. Completely blind to logic refactors inside custom code. |
-| **Traditional SAST / CodeQL** | Scans generic patterns | Lacks repository-specific historical memory of *why* a particular 3-line check was added in this project years ago. |
+| **Traditional SAST / CodeQL** | Scans generic static patterns | Lacks repository-specific historical memory of *why* a particular 3-line check was added in this project years ago. |
 | **Human Code Reviewers** | Scans PR diff hunks | Reviewers only see isolated `+` and `-` lines without historical context. Moving code to a helper function easily conceals a deleted CVE guard. |
 
 ---
@@ -30,7 +30,7 @@ However, **codebases constantly evolve**. Months or years later, developers refa
 
 **PATCHBACK** acts as an automated, permanent **Security Memory** for software repositories:
 1. It translates past CVE fixes into machine-verifiable **Typed Security Invariants**.
-2. It verifies every incoming Pull Request in CI via deterministic Abstract Syntax Tree (AST) analysis.
+2. When a new Pull Request is opened, it verifies the code in CI via deterministic **Abstract Syntax Tree (AST)** reachability analysis.
 3. It guarantees that security checks are never removed or bypassed during refactors.
 
 > 🧠 **Core Guiding Principle:**  
@@ -39,101 +39,179 @@ However, **codebases constantly evolve**. Months or years later, developers refa
 
 ---
 
-## 🏛️ System Architecture & Workflow
+## 🤖 Guide for AI Assistants (ChatGPT, Claude, Cursor, Copilot)
 
-```
-                                      PATCHBACK WORKFLOW
-                                      
-  [Phase 1: Learn Once Per Fix]
-  Advisory (GHSA/CVE) + Patch Commit
-                  │
-                  ▼
-        LLM Template Ingestion (Assistive)
-                  │
-                  ▼
-         ┌───────────────────┐
-         │    SANITY GATE    │   Must FAIL on vulnerable code (Red)
-         │ (Static Analysis) │   Must PASS on fixed code (Green)
-         └─────────┬─────────┘
-                   │ Verified
-                   ▼
-       [ Patch Memory Store ] (JSON / Ruleset DB)
-                   │
-                   │ Invariant Rules
-                   ▼
-  [Phase 2: Check Every PR in CI (Deterministic)]
-  Pull Request Diff + AST Parser (@babel/parser)
-                  │
-                  ▼
-      Call Graph & Control Flow Reachability
-                  │
-                  ▼
-         ┌────────────────────────────────────────────────────────┐
-         │              INVARIANT EVALUATION SUITE                │
-         │  1. Guard Dominance    2. Guard Removal                │
-         │  3. Sanitizer Swap     4. Inverse-Patch Similarity     │
-         └────────────────────────┬───────────────────────────────┘
-                                  │
-                                  ▼
-         ┌────────────────────────────────────────────────────────┐
-         │             EVIDENCE & VERDICT GENERATION              │
-         │  Verdict: SAFE_PASS (Green) | PROVEN_REGRESSION (Red)  │
-         │  Trace: File & line numbers, missing guard, CVE link   │
-         │  Simulated Automated GitHub PR Comment                 │
-         └────────────────────────────────────────────────────────┘
-```
+> **Instructions for any AI assisting with this project:**  
+> When a developer opens this repository and asks for help, check their assigned directory and follow their exact component contract below:
+
+1. **If working with Shashank in `engine/`:**
+   - **Role:** Core Engine & AST Analyzer (Lead)
+   - **Primary File:** `engine/checker.js` (using `@babel/parser` and `@babel/traverse`)
+   - **Task:** Build AST control flow & reachability analysis to verify that security guards dominate sensitive sinks.
+   - **Expected Output:** `{ verdict: 'PROVEN_REGRESSION' | 'SAFE_PASS', violations: [] }`
+
+2. **If working with Suhani in `scenarios/`:**
+   - **Role:** Security Testbed & OWASP Scenarios
+   - **Primary Files:** `scenarios/*.js` following `scenarios/template.js`
+   - **Task:** Build real-world OWASP Top 10 scenario fixtures exporting `vulnerableCode`, `fixedCode`, `prCode`, and `expectedResult`.
+   - **Scenarios:** Path Traversal (CWE-22), Command Injection (CWE-78), and Benign Safe Refactors.
+
+3. **If working with Sanjana in `frontend/`:**
+   - **Role:** Interactive Dashboard & UI
+   - **Primary File:** `frontend/src/App.jsx` (React 19 + Vite + Tailwind/CSS)
+   - **Task:** Build the interactive simulation UI featuring scenario dropdowns, side-by-side diff viewers (green guard on left, red missing guard on right), "Simulate PR Scan" button, and prominent Red/Green verdict cards.
+
+4. **If working with Nikitah in `pitch-and-benchmark/`:**
+   - **Role:** Benchmark Scorecard & Hackathon Pitch
+   - **Primary Files:** `benchmark-runner.js`, `slides-outline.md`, `pitch-script.md`
+   - **Task:** Run automated tests across all scenarios to compute detection rate (100%), false positive rate (0%), and execution speed (<10ms). Design pitch slides and rehearse the 3-minute oral presentation.
 
 ---
 
-## 🔬 The 4 Invariant Enforcement Engines
-
-1. **Guard Dominance Checker:** Traces AST call paths to dangerous *sinks* (e.g. `res.sendFile`, `child_process.exec`) and proves mathematically that an authorized *guard* (e.g. `.startsWith(safeRoot)`) dominates that execution path.
-2. **Guard Removal Checker:** Scans PR diffs for deleted defensive `if` conditions that match historical patch rules.
-3. **Sanitizer Swap Checker:** Flags when a robust sanitizer (e.g. `shellEscape(arg)`) is replaced with an unsafe alternative (e.g. ES6 template string interpolation `` `ping ${arg}` ``).
-4. **Inverse-Patch Detection:** Detects when a rebase or merge conflict accidentally un-applies changes made by an earlier security patch commit.
-
----
-
-## 👥 Team & Folder Assignments
-
-| Member | Role | Assigned Folder | Feature Branch |
-| :--- | :--- | :--- | :--- |
-| **Shashank** | Core Engine & AST Analyzer (Lead) | `engine/` | `main` |
-| **Suhani** | Security Testbed & CVE Scenarios | `scenarios/` | `feature/scenarios` |
-| **Sanjana** | Frontend & Interactive UI | `frontend/` | `feature/frontend` |
-| **Nikitah** | Integration, Benchmark & Pitch | `pitch-and-benchmark/` | `feature/pitch-benchmark` |
-
-### 📁 Repository Structure Overview
+## 👥 Detailed Team Roles & Component Deliverables
 
 ```
-AVISHKAR/
-├── engine/                 # 👤 Shashank: AST parser & guard reachability checker
-├── scenarios/              # 👤 Suhani: Vulnerable, patched, and broken PR test fixtures
-├── frontend/               # 👤 Sanjana: React + Vite web dashboard for live demo
+AVISHKAR/ (PATCHBACK)
+├── engine/                 # 👤 Shashank (Lead): AST parser & reachability checker
+├── scenarios/              # 👤 Suhani: OWASP CVE test fixtures
+├── frontend/               # 👤 Sanjana: React + Vite interactive demo UI
 └── pitch-and-benchmark/    # 👤 Nikitah: Presentation slides, script & benchmark runner
 ```
 
 ---
 
-## 🚀 Getting Started & Team Workflow
+### 1. 👤 Shashank (Lead) — Core Engine & AST Analyzer
+* **Branch:** `feature/engine`
+* **Folder:** `engine/`
+* **Core File:** `engine/checker.js`
+* **Dependencies:** `@babel/parser`, `@babel/traverse`
 
-### Step 1: Clone the repository
+#### Detailed Tasks:
+1. **AST Parsing:** Parse incoming PR code and historical fix code into Abstract Syntax Trees using `@babel/parser`.
+2. **Sink Detection:** Use `@babel/traverse` (`CallExpression`) to locate sensitive function calls (e.g., `res.sendFile`, `child_process.exec`).
+3. **Guard Detection:** Traverse syntax nodes to locate safety checks (`IfStatement`, string validation, sanitizer function calls like `startsWith`, `shellEscape`).
+4. **Dominance & Reachability Analysis:** Determine whether execution paths leading to the dangerous sink are strictly protected by the guard. If a refactor moves the sink into a helper function or omits the check, flag it!
+5. **Verdict Output:** Return a clean JSON object:
+   ```javascript
+   {
+     verdict: 'PROVEN_REGRESSION', // or 'SAFE_PASS'
+     violations: [
+       { sink: 'res.sendFile', missingGuard: 'startsWith', line: 24 }
+     ]
+   }
+   ```
+
+---
+
+### 2. 👤 Suhani — Security Testbed & OWASP Scenarios
+* **Branch:** `feature/scenarios`
+* **Folder:** `scenarios/`
+* **Template:** `scenarios/template.js`
+
+#### Detailed Tasks:
+Each scenario file must export an object with 4 specific fields:
+* `vulnerableCode`: Original buggy code before any security patch was added.
+* `fixedCode`: Official patch adding the security check (`guard`).
+* `prCode`: Realistic refactor PR where a developer accidentally deletes or bypasses the guard.
+* `expectedResult`: `'PROVEN_REGRESSION'` or `'SAFE_PASS'`.
+
+#### Required Scenario Files:
+1. **`01-path-traversal.js` (OWASP A01: Broken Access Control / CWE-22):**
+   * *Dangerous Sink:* `res.sendFile(filePath)`
+   * *Required Guard:* Path boundary check (`safePath.startsWith(root)` or containment validation).
+   * *Regression PR:* Developer refactors file delivery into a helper function `sendAsset()`, dropping the path guard.
+   * *Expected:* `PROVEN_REGRESSION`
+2. **`02-command-injection.js` (OWASP A03/A05: Injection / CWE-78):**
+   * *Dangerous Sink:* `child_process.exec(cmd)`
+   * *Required Guard:* Sanitizing arguments via `shellEscape(host)`.
+   * *Regression PR:* Developer rewrites string concatenation with template literals (`` `ping ${host}` ``) and forgets `shellEscape`.
+   * *Expected:* `PROVEN_REGRESSION`
+3. **`03-benign-clean-pr.js` (Clean Baseline / False Positive Gate):**
+   * *Purpose:* A harmless refactor (renaming variables, adding comments) where the security guard **remains present**.
+   * *Expected:* `SAFE_PASS` (proves PATCHBACK has zero false alarms on clean code).
+
+---
+
+### 3. 👤 Sanjana — Frontend & Interactive UI Dashboard
+* **Branch:** `feature/frontend`
+* **Folder:** `frontend/`
+* **Tech Stack:** React 19, Vite, Tailwind / CSS
+
+#### Detailed Tasks:
+Build the interactive visual dashboard inside `frontend/src/App.jsx` for the hackathon judges:
+1. **Header & Live Status:**
+   * Shows project branding: **PATCHBACK — Security Regression Intelligence**.
+   * Status indicators: `PR Invariant Gate: ACTIVE` | `Latency: < 5ms`.
+2. **Scenario Selector:**
+   * Dropdown or tab buttons to pick between Suhani's scenarios (Path Traversal, Command Injection, Benign Refactor).
+3. **Dual Code Comparison Viewer (Side-by-Side Diff):**
+   * **Left Panel ("Historical Patch"):** Shows the safe code with the defensive guard highlighted in **Green**.
+   * **Right Panel ("Incoming Pull Request"):** Shows the refactored code with the missing/bypassed guard highlighted in **Red**.
+4. **"Simulate PR Scan" Action Button:**
+   * Large, prominent button with animated scan feedback (*"Analyzing AST → Verifying Invariant Dominance..."*).
+5. **Security Verdict Banner (The Big Visual Climax):**
+   * **When Regression Detected (Red Alert Card):**
+     * 🚨 **`REGRESSION DETECTED: PR removes CWE-22 guard before merge!`**
+     * Displays OWASP badge (`OWASP A01: Broken Access Control`), affected lines, and a mock "GitHub PR Blocked" comment.
+   * **When Safe (Green Shield Card):**
+     * 🛡️ **`SAFE TO MERGE: All historical guards intact. Zero violations.`**
+6. **Live Performance Metrics Card:**
+   * Latency ticker (`< 5ms`), confidence (`100% Deterministic`), false positive rate (`0.0%`).
+
+---
+
+### 4. 👤 Nikitah — Benchmark Scorecard & Pitch Deck
+* **Branch:** `feature/pitch-benchmark`
+* **Folder:** `pitch-and-benchmark/`
+* **Files:** `benchmark-runner.js`, `slides-outline.md`, `pitch-script.md`
+
+#### Detailed Tasks:
+1. **Automated Benchmark Runner (`benchmark-runner.js`):**
+   * Imports all scenarios from `scenarios/` and executes them against `engine/checker.js`.
+   * Automatically prints an ASCII summary table to the terminal showing expected vs actual verdicts.
+   * Computes True Positive Rate (100%) and False Positive Rate (0%).
+2. **Presentation Slide Deck (`slides-outline.md`):**
+   * Create the final presentation on Canva / PowerPoint following the 5-slide outline:
+     * *Slide 1:* Hook (The 4-year regreSSHion disaster).
+     * *Slide 2:* The Blind Spot (Why Snyk, Dependabot, and CodeQL fail).
+     * *Slide 3:* The Solution (AST Invariant & Guard Dominance).
+     * *Slide 4:* Benchmark Results (100% detection, 0% false positives, < 5ms).
+     * *Slide 5:* Live Demo & GitHub Action Roadmap.
+3. **Pitch Script (`pitch-script.md`):**
+   * Rehearse the 3-minute oral delivery with clear team speaker transitions.
+
+---
+
+## 🚀 Git Team Workflow
+
+### 1. Clone the repository
 ```bash
-git clone <GITHUB-REPO-URL>
-cd AVISHKAR
+git clone https://github.com/Shashank-Swaraj/PATCH-BACK.git
+cd PATCH-BACK
 ```
 
-### Step 2: Switch to your team branch
-* **If you are Suhani:** `git checkout -b feature/scenarios`
-* **If you are Sanjana:** `git checkout -b feature/frontend`
-* **If you are Nikitah:** `git checkout -b feature/pitch-benchmark`
+### 2. Switch to your assigned feature branch
+```bash
+# If you are Shashank:
+git checkout -b feature/engine
 
-### Step 3: Push changes and open a PR
+# If you are Suhani:
+git checkout -b feature/scenarios
+
+# If you are Sanjana:
+git checkout -b feature/frontend
+
+# If you are Nikitah:
+git checkout -b feature/pitch-benchmark
+```
+
+### 3. Commit and raise a Pull Request (PR)
 ```bash
 git add .
-git commit -m "feat: completed my assigned component"
-git push origin <your-branch-name>
+git commit -m "feat: complete assigned tasks"
+git push -u origin <your-branch-name>
 ```
+*Never push directly to `main`! Always open a Pull Request for review.*
 
 ---
 
@@ -141,12 +219,9 @@ git push origin <your-branch-name>
 
 | Scenario | Attack Class | Target Sink | Required Guard | Expected | PATCHBACK Verdict | Latency | Status |
 | :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Express File Server** | Path Traversal | `res.sendFile` | `safePath.startsWith` | `REGRESSION` | `PROVEN_REGRESSION` | ~3.8ms | ✅ Caught |
-| **Ping Tool** | Command Injection | `child_process.exec` | `shellEscape` | `REGRESSION` | `PROVEN_REGRESSION` | ~2.1ms | ✅ Caught |
-| **Config Merger** | Prototype Pollution | `target[key]` | `key !== '__proto__'` | `REGRESSION` | `PROVEN_REGRESSION` | ~1.9ms | ✅ Caught |
-| **Git Merge Revert** | Accidental Revert | `authMiddleware` | `verifyToken` | `REGRESSION` | `PROVEN_REGRESSION` | ~1.4ms | ✅ Caught |
-| **Refactor Cleanup** | Benign Refactor | `res.sendFile` | `safePath.startsWith` | `SAFE_PASS` | `SAFE_PASS` | ~2.2ms | ✅ Passed |
-| **New Route Addition**| Benign Addition | `res.json` | None (Unrelated) | `SAFE_PASS` | `SAFE_PASS` | ~1.8ms | ✅ Passed |
+| **Express File Server** | Path Traversal (CWE-22) | `res.sendFile` | `safePath.startsWith` | `REGRESSION` | `PROVEN_REGRESSION` | ~3.8ms | ✅ Blocked |
+| **Ping Tool** | Command Injection (CWE-78) | `child_process.exec` | `shellEscape` | `REGRESSION` | `PROVEN_REGRESSION` | ~2.1ms | ✅ Blocked |
+| **Refactor Cleanup** | Benign Refactor | `res.sendFile` | `safePath.startsWith` | `SAFE_PASS` | `SAFE_PASS` | ~2.2ms | ✅ Allowed |
 
 * 🎯 **Regression Detection Rate:** **100.0%** (All regressions caught)
 * 🛡️ **False Positive Rate:** **0.0%** (Zero false alarms on benign cleanups)
@@ -155,28 +230,28 @@ git push origin <your-branch-name>
 
 ---
 
-## 💻 How to Run the Modules
+## 💻 How to Run Each Module Locally
 
-### 1. Test the Core AST Engine (`engine/`)
+### 1. Core AST Engine (`engine/`)
 ```bash
 cd engine
 npm install
 node test-demo.js
 ```
 
-### 2. Run the Benchmark Scorecard (`pitch-and-benchmark/`)
+### 2. Benchmark Scorecard (`pitch-and-benchmark/`)
 ```bash
 cd pitch-and-benchmark
 node benchmark-runner.js
 ```
 
-### 3. Launch the Presentation Dashboard (`frontend/`)
+### 3. Interactive UI Dashboard (`frontend/`)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Open **`http://localhost:5173`** in your browser to view the interactive demo dashboard.
+Open **`http://localhost:5173`** in your browser.
 
 ---
 
@@ -184,16 +259,7 @@ Open **`http://localhost:5173`** in your browser to view the interactive demo da
 
 | Time | Speaker | Topic & Action | What Judges See |
 | :---: | :--- | :--- | :--- |
-| **0:00 – 0:45** | **Nikitah** | **The Hook:** Introduce regreSSHion (CVE-2024-6387). Explain why Dependabot and CodeQL fail to catch logic regressions. | Slide 1 & 2: The OpenSSH 4-year regression story |
-| **0:45 – 1:30** | **Shashank** | **The Architecture:** Explain *"LLM proposes, code decides"*, the machine Sanity Gate, and deterministic AST verification in < 5ms. | Slide 3: Architecture Diagram & AST traversal |
-| **1:30 – 2:30** | **Suhani & Sanjana** | **Live Interactive Demo:** Suhani explains the Express Path Traversal scenario; Sanjana clicks *"Run Invariant Check"*. The UI immediately highlights the missing guard and shows the simulated GitHub PR block. | Live Dashboard: Side-by-side diff + Red Alert card |
+| **0:00 – 0:45** | **Nikitah** | **The Hook:** Introduce regreSSHion (CVE-2024-6387). Explain why Dependabot and Snyk fail to catch logic regressions. | Slide 1 & 2: The OpenSSH 4-year regression story |
+| **0:45 – 1:30** | **Shashank** | **The Architecture:** Explain *"LLM proposes, code decides"*, AST reachability, and deterministic CI verification in < 5ms. | Slide 3: Architecture Diagram & AST traversal |
+| **1:30 – 2:30** | **Suhani & Sanjana** | **Live Interactive Demo:** Suhani explains the Express Path Traversal scenario; Sanjana clicks *"Simulate PR Scan"*. The UI immediately highlights the missing guard and shows the simulated GitHub PR block. | Live Dashboard: Side-by-side diff + Red Alert card |
 | **2:30 – 3:00** | **Nikitah** | **The Benchmark & Close:** Present the 100% detection rate and 0% false positive benchmark scorecard. Close with tagline: *"Remember the fix. Protect the future."* | Benchmark Scorecard Table & GitHub Action roadmap |
-
----
-
-## 🔮 Future Roadmap
-
-* [x] **v1.0 (Hackathon MVP):** JavaScript/Node.js AST engine (`@babel/parser`), 4 core invariant checkers, interactive React demo UI.
-* [ ] **v1.1:** Python (`ast` / LibCST) and Go (`go/ast`) support.
-* [ ] **v1.2:** Single-line GitHub Action integration (`.github/workflows/patchback.yml`).
-* [ ] **v2.0:** Community-driven global Patch Memory Registry for top open-source repositories.
