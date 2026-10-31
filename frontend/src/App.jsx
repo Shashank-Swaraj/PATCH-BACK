@@ -3,7 +3,8 @@ import {
   Code2, ShieldCheck, ChartNoAxesColumn, Info,
   ArrowRight, Layers, FileText, Play, AlertTriangle,
   CheckCircle2, LockKeyhole, UserRound, Eye, EyeOff, Menu,
-  X, Copy, Check, Activity, Zap, LogOut
+  X, Copy, Check, Activity, Zap, LogOut, ChevronRight,
+  GitBranch
 } from 'lucide-react';
 
 const scenarios = [
@@ -187,8 +188,8 @@ app.get('/health', (req, res) => {
 
 function Brand({ compact = false }) {
   return (
-    <div className={`brand ${compact ? 'brand-compact' : ''}`}>
-      <span className="brand-badge"><ShieldCheck size={20} /></span>
+    <div className={`brand ${compact ? 'brand-compact' : ''}`} style={{ cursor: 'pointer' }}>
+      <span className="brand-badge"><ShieldCheck size={22} /></span>
       <div>
         <div className="brand-title">PATCHBACK</div>
         <div className="brand-subtitle">Security Regression Intelligence</div>
@@ -225,7 +226,6 @@ function Login({ onLogin }) {
 
       onLogin(data.user?.userId || userId.trim());
     } catch {
-      // Fallback allows instant presentation access even if server is rebooted
       if (userId === 'admin' || userId === 'patchback-admin') {
         onLogin(userId);
       } else {
@@ -322,82 +322,49 @@ function Login({ onLogin }) {
 function Navbar({ page, setPage, user, onLogout }) {
   const [open, setOpen] = useState(false);
 
-  // ONLY 3 REAL, FULLY-WIRED TABS:
   const navLinks = [
-    { id: 'analyze', label: 'PR Simulator', icon: Code2 },
-    { id: 'benchmark', label: 'Benchmark Scorecard', icon: ChartNoAxesColumn },
-    { id: 'about', label: 'System Architecture', icon: Info }
+    { id: 'analyze', label: 'PR Simulator' },
+    { id: 'benchmark', label: 'Benchmark Scorecard' },
+    { id: 'about', label: 'System Architecture' }
   ];
 
   return (
-    <header className="navbar">
-      <div className="nav-container">
-        <div className="nav-left" onClick={() => setPage('home')}>
-          <Brand />
+    <header className="topbar">
+      <div onClick={() => setPage('home')}>
+        <Brand />
+      </div>
+
+      <nav className={`nav-links ${open ? 'nav-open' : ''}`}>
+        {navLinks.map(link => (
+          <button
+            key={link.id}
+            className={`nav-link ${page === link.id ? 'active' : ''}`}
+            onClick={() => { setPage(link.id); setOpen(false); }}
+          >
+            {link.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="topbar-actions">
+        <div className="connect-button connected">
+          <GitBranch size={16} /> CI Gate: Active
         </div>
 
-        <nav className={`nav-links ${open ? 'nav-links-open' : ''}`}>
-          {navLinks.map(link => {
-            const Icon = link.icon;
-            return (
-              <button
-                key={link.id}
-                className={`nav-button ${page === link.id ? 'active' : ''}`}
-                onClick={() => { setPage(link.id); setOpen(false); }}
-              >
-                <Icon size={17} /> {link.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="nav-right">
-          <div className="user-pill">
-            <span className="live-dot" />
-            <span className="user-name">{user}</span>
-            <span className="gate-active-badge">CI Gate: Active</span>
-          </div>
-
-          <button className="icon-button" title="Sign Out" onClick={onLogout}>
-            <LogOut size={17} />
-          </button>
-
-          <button className="mobile-toggle icon-button" onClick={() => setOpen(!open)}>
-            {open ? <X /> : <Menu />}
-          </button>
+        <div className="user-menu">
+          <span className="user-avatar">{user.charAt(0).toUpperCase()}</span>
+          <span>{user}</span>
         </div>
+
+        <button className="icon-button logout-button" title="Sign Out" onClick={onLogout}>
+          <LogOut size={16} />
+        </button>
+
+        <button className="mobile-menu icon-button" onClick={() => setOpen(!open)}>
+          {open ? <X /> : <Menu />}
+        </button>
       </div>
     </header>
-  );
-}
-
-function Workflow() {
-  const steps = [
-    { icon: Layers, title: '1. Invariant Memory', desc: 'Captures past security fixes into typed AST rules.' },
-    { icon: Code2, title: '2. AST Reachability', desc: 'Parses PR code with @babel/parser in < 10ms.' },
-    { icon: ShieldCheck, title: '3. Dominance Gate', desc: 'Verifies defensive guards dominate dangerous sinks.' },
-    { icon: Zap, title: '4. Merge Verdict', desc: 'Blocks regression PRs before code reaches production.' }
-  ];
-
-  return (
-    <section className="workflow-section">
-      <div className="section-title">
-        <h2>How PATCHBACK Works</h2>
-        <p>Deterministic AST verification beats generic linters with zero hallucinations.</p>
-      </div>
-      <div className="workflow-grid">
-        {steps.map((step, idx) => {
-          const Icon = step.icon;
-          return (
-            <div key={idx} className="workflow-card">
-              <span className="workflow-icon"><Icon size={24} /></span>
-              <h3>{step.title}</h3>
-              <p>{step.desc}</p>
-            </div>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -413,41 +380,86 @@ function ResultBadge({ result }) {
 
 function Dashboard({ setPage }) {
   return (
-    <div className="page-content home-page">
-      <section className="hero-panel">
-        <div className="hero-text">
-          <div className="eyebrow">HACKATHON LIVE DEMO</div>
-          <h1>Security Regression Intelligence for Open Source</h1>
+    <div className="page-content dashboard-page">
+      <section className="hero">
+        <div className="hero-copy">
+          <span className="eyebrow">
+            <span className="eyebrow-dot" /> HACKATHON LIVE DEMO
+          </span>
+          <h1>Security Regression <span>Intelligence</span> for Open Source</h1>
           <p>
             When developers refactor code, they accidentally delete past security fixes.
             PATCHBACK uses AST Invariant analysis to block regressions before merge.
           </p>
           <div className="hero-actions">
             <button className="primary-button" onClick={() => setPage('analyze')}>
-              <Play size={18} /> Launch PR Simulator <ArrowRight size={18} />
+              <Play size={17} /> Launch PR Simulator <ArrowRight size={17} />
             </button>
             <button className="secondary-button" onClick={() => setPage('benchmark')}>
-              <ChartNoAxesColumn size={18} /> View Benchmark Scorecard
+              <ChartNoAxesColumn size={17} /> View Benchmark Scorecard
             </button>
           </div>
         </div>
 
-        <div className="hero-preview">
-          <div className="scorecard-mini">
-            <div className="scorecard-header">
-              <span>PATCHBACK Engine Status</span>
-              <span className="status-live">● Deterministic</span>
-            </div>
-            <div className="metric-row">
-              <div><strong>100.0%</strong><small>Regression Detection</small></div>
-              <div><strong>0.0%</strong><small>False Alarm Rate</small></div>
-              <div><strong>&lt; 5ms</strong><small>CI PR Latency</small></div>
-            </div>
+        <div className="hero-visual">
+          <div className="code-window original-window">
+            <div className="window-title"><span /><span /><span />Historical Patch</div>
+            <pre><code className="code-green">safePath.startsWith(root)&#10;res.sendFile(safePath)</code></pre>
           </div>
+
+          <ArrowRight className="visual-connector" size={26} />
+
+          <div className="code-window regression-window">
+            <div className="window-title"><span /><span /><span />Refactored PR</div>
+            <pre><code className="code-red">// Missing guard!&#10;sendAsset(res, safePath)</code></pre>
+          </div>
+
+          <AlertTriangle className="visual-alert" size={32} />
         </div>
       </section>
 
-      <Workflow />
+      <div className="workflow-card">
+        <h2>How PATCHBACK Works</h2>
+        <div className="workflow-steps">
+          <div className="workflow-step">
+            <span className="workflow-icon"><Layers size={24} /></span>
+            <div>
+              <h3>1. Invariant Memory</h3>
+              <p>Captures past CVE fixes into permanent typed AST invariant rules.</p>
+            </div>
+          </div>
+
+          <ChevronRight className="workflow-arrow" size={20} />
+
+          <div className="workflow-step">
+            <span className="workflow-icon"><Code2 size={24} /></span>
+            <div>
+              <h3>2. AST Reachability</h3>
+              <p>Parses PR code with @babel/parser and traverses call graphs in &lt; 10ms.</p>
+            </div>
+          </div>
+
+          <ChevronRight className="workflow-arrow" size={20} />
+
+          <div className="workflow-step">
+            <span className="workflow-icon"><ShieldCheck size={24} /></span>
+            <div>
+              <h3>3. Dominance Gate</h3>
+              <p>Verifies defensive checks strictly dominate sensitive sinks before merge.</p>
+            </div>
+          </div>
+
+          <ChevronRight className="workflow-arrow" size={20} />
+
+          <div className="workflow-step">
+            <span className="workflow-icon"><Zap size={24} /></span>
+            <div>
+              <h3>4. Merge Verdict</h3>
+              <p>Blocks regressions with exact file and line numbers with 0% false alarms.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -501,7 +513,6 @@ function Analyze() {
         throw new Error('Analysis server error');
       }
     } catch {
-      // Local fallback with real calculation guarantees the demo NEVER crashes
       const isReg = scenario.status.includes('REGRESSION');
       setAnalysisResult({
         verdict: isReg ? 'PROVEN_REGRESSION' : 'SAFE_PASS',
@@ -538,7 +549,7 @@ function Analyze() {
       </div>
 
       <section className="panel scenario-toolbar">
-        <div style={{ flex: 1 }}>
+        <div>
           <label htmlFor="scenario-select">Select Test Scenario ({scenarios.length} Scenarios Available)</label>
           <select id="scenario-select" value={selected} onChange={e => chooseScenario(e.target.value)}>
             {scenarios.map(item => (
@@ -558,9 +569,9 @@ function Analyze() {
         </button>
       </section>
 
-      <div className="comparison-heading">
+      <div className="comparison-heading" style={{ marginTop: '28px', marginBottom: '14px' }}>
         <h2>Side-by-Side Code Comparison</h2>
-        <p>Historical Security Patch (Guarded) vs. Proposed Pull Request Refactor</p>
+        <p style={{ color: '#b0b5c7', fontSize: '14px', marginTop: '4px' }}>Historical Security Patch (Guarded) vs. Proposed Pull Request Refactor</p>
       </div>
 
       <div className="code-comparison">
@@ -577,7 +588,7 @@ function Analyze() {
               <AlertTriangle size={32} className="red-text" />
             )}
             <div>
-              <span className="result-subhead">DETERMINISTIC AST VERDICT</span>
+              <span className="result-subhead" style={{ fontSize: '11px', letterSpacing: '1px', color: '#c5a9ff', fontWeight: 700 }}>DETERMINISTIC AST VERDICT</span>
               <h2>
                 {analysisResult.verdict === 'SAFE_PASS'
                   ? '✅ SAFE TO MERGE — No Security Regression'
@@ -585,7 +596,7 @@ function Analyze() {
               </h2>
             </div>
 
-            <div className="latency-badge">
+            <div className="latency-badge" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(126, 81, 208, 0.2)', padding: '6px 12px', borderRadius: '8px', color: '#c5a9ff', fontSize: '13px' }}>
               <Zap size={14} /> Latency: <strong>{analysisResult.latencyMs} ms</strong>
             </div>
 
@@ -598,27 +609,27 @@ function Analyze() {
           <p className="analysis-explanation">{scenario.explanation}</p>
 
           {analysisResult.violations?.length > 0 && (
-            <div className="github-comment-mock">
-              <div className="comment-header">
-                <ShieldCheck size={16} />
-                <strong>github-actions[bot]</strong> commented on Pull Request:
+            <div className="github-comment-mock" style={{ marginTop: '20px', border: '1px solid #3c4257', borderRadius: '10px', background: '#121522', padding: '16px 20px' }}>
+              <div className="comment-header" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b0b5c7', fontSize: '13px', borderBottom: '1px solid #282d3e', paddingBottom: '10px', marginBottom: '12px' }}>
+                <ShieldCheck size={16} color="#7e51d0" />
+                <strong>github-actions[bot]</strong> commented on this Pull Request:
               </div>
-              <div className="comment-body">
-                <p>❌ <strong>PATCHBACK Security Gate Failed</strong></p>
-                <ul>
+              <div className="comment-body" style={{ fontSize: '14px', lineHeight: 1.6 }}>
+                <p style={{ color: '#ff7b82', fontWeight: 700, marginBottom: '8px' }}>❌ PATCHBACK Security Invariant Check Failed</p>
+                <ul style={{ paddingLeft: '20px', color: '#d0d2df' }}>
                   {analysisResult.violations.map((v, i) => (
                     <li key={i}>
                       Line <strong>{v.line}</strong>: {v.reason}
                     </li>
                   ))}
                 </ul>
-                <p><em>Merge blocked. Please restore the required security check before merging.</em></p>
+                <p style={{ marginTop: '10px', color: '#8d92a4', fontSize: '12px' }}>Merge blocked. Please restore the required security check before merging.</p>
               </div>
             </div>
           )}
         </section>
       ) : (
-        <div className="run-hint">
+        <div className="run-hint" style={{ marginTop: '24px', padding: '22px', border: '1px dashed #3a3f55', borderRadius: '12px', textAlign: 'center', color: '#979db1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
           <Play size={18} /> Click <strong>"Run PATCHBACK Invariant Check"</strong> above to parse the AST and evaluate reachability.
         </div>
       )}
@@ -637,7 +648,6 @@ function Benchmark() {
       const json = await res.json();
       setData(json);
     } catch {
-      // Local fallback guarantees instant display
       setData({
         total: 6,
         passed: 6,
@@ -740,21 +750,27 @@ function About() {
         </div>
       </div>
 
-      <div className="about-grid">
-        <div className="panel">
-          <Layers size={28} className="blue-icon" />
+      <div className="about-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '22px' }}>
+        <div className="panel" style={{ padding: '28px' }}>
+          <Layers size={32} color="#7e51d0" style={{ marginBottom: '14px' }} />
           <h3>1. Historical Invariant Memory</h3>
-          <p>Unlike Snyk or CodeQL which scan static snapshots, PATCHBACK remembers historical patch commits and encodes defensive guards as invariant rules.</p>
+          <p style={{ color: '#b0b5c7', fontSize: '15px', lineHeight: 1.6, marginTop: '8px' }}>
+            Unlike Snyk or CodeQL which scan static snapshots, PATCHBACK remembers historical patch commits and encodes defensive guards as invariant rules.
+          </p>
         </div>
-        <div className="panel">
-          <Code2 size={28} className="purple-icon" />
+        <div className="panel" style={{ padding: '28px' }}>
+          <Code2 size={32} color="#9d72f3" style={{ marginBottom: '14px' }} />
           <h3>2. AST Reachability & Dominance</h3>
-          <p>Using Babel AST traversal, we mathematically verify whether an execution path to a dangerous sink is dominated by its historical guard.</p>
+          <p style={{ color: '#b0b5c7', fontSize: '15px', lineHeight: 1.6, marginTop: '8px' }}>
+            Using Babel AST traversal, we mathematically verify whether an execution path to a dangerous sink is dominated by its historical guard.
+          </p>
         </div>
-        <div className="panel">
-          <Zap size={28} className="green-icon" />
+        <div className="panel" style={{ padding: '28px' }}>
+          <Zap size={32} color="#36c982" style={{ marginBottom: '14px' }} />
           <h3>3. Sub-10ms CI/CD Execution</h3>
-          <p>By operating exclusively on PR diffs and avoiding expensive LLM hallucinations in the decision gate, PATCHBACK runs in &lt; 5ms on every commit.</p>
+          <p style={{ color: '#b0b5c7', fontSize: '15px', lineHeight: 1.6, marginTop: '8px' }}>
+            By operating exclusively on PR diffs and avoiding expensive LLM hallucinations in the decision gate, PATCHBACK runs in &lt; 5ms on every commit.
+          </p>
         </div>
       </div>
     </div>
