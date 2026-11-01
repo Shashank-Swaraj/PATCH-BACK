@@ -7,6 +7,8 @@ const traverse = traversePkg.default || traversePkg;
  * PATCHBACK Core Security Invariant Checker
  * Detects whether dangerous sinks are dominated by historical security guards.
  * Handles: CallExpressions, AssignmentExpressions, and BinaryExpressions.
+ * Production-ready: Gracefully catches syntax errors on malformed user input,
+ * supports snippet-level returns, TypeScript, and JSX.
  */
 export function checkSecurityInvariant(code, sinkPattern, guardPattern) {
   const startTime = performance.now();
@@ -21,10 +23,35 @@ export function checkSecurityInvariant(code, sinkPattern, guardPattern) {
     };
   }
 
-  const ast = parse(code, {
-    sourceType: 'unambiguous',
-    plugins: ['jsx', 'typescript'],
-  });
+  // Gracefully handle malformed or empty code input
+  if (!code || typeof code !== 'string' || code.trim() === '') {
+    return {
+      verdict: 'SAFE_PASS',
+      violations: [],
+      latencyMs: 0.1,
+    };
+  }
+
+  let ast;
+  try {
+    ast = parse(code, {
+      sourceType: 'unambiguous',
+      allowReturnOutsideFunction: true,
+      plugins: ['jsx', 'typescript'],
+    });
+  } catch (parseErr) {
+    return {
+      verdict: 'SYNTAX_ERROR',
+      violations: [
+        {
+          line: parseErr.loc?.line ?? 1,
+          sink: 'JS Parser',
+          reason: `Syntax Error: ${parseErr.message?.split('\n')[0] || parseErr.message}`,
+        },
+      ],
+      latencyMs: Number((performance.now() - startTime).toFixed(2)),
+    };
+  }
 
   // Extract core keywords from guard expression
   const guardKeywords = guardPattern

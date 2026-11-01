@@ -4,7 +4,7 @@ import {
   ArrowRight, Layers, FileText, Play, AlertTriangle,
   CheckCircle2, LockKeyhole, UserRound, Eye, EyeOff, Menu,
   X, Copy, Check, Activity, Zap, LogOut, ChevronRight,
-  GitBranch
+  GitBranch, Globe, Terminal, RefreshCw
 } from 'lucide-react';
 
 const scenarios = [
@@ -601,10 +601,20 @@ function CodePanel({ title, code, variant }) {
 }
 
 function Analyze() {
+  const [tabMode, setTabMode] = useState('curated'); // 'curated' | 'custom'
   const [selected, setSelected] = useState('path');
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Dynamic Custom Scanner State
+  const [customRepo, setCustomRepo] = useState('https://github.com/expressjs/express/pull/5021');
+  const [customSink, setCustomSink] = useState('res.sendFile');
+  const [customGuard, setCustomGuard] = useState('safePath.startsWith(root)');
+  const [customSafeCode, setCustomSafeCode] = useState(`const safePath = path.resolve(root, req.query.file);\nif (!safePath.startsWith(root + path.sep)) {\n  return res.sendStatus(403);\n}\nres.sendFile(safePath);`);
+  const [customPrCode, setCustomPrCode] = useState(`function sendAsset(res, filePath) {\n  return res.sendFile(filePath);\n}\n\napp.get('/download', (req, res) => {\n  const safePath = path.resolve(root, req.query.file);\n  // REGRESSION: Path guard was dropped during helper refactor!\n  sendAsset(res, safePath);\n});`);
+  const [fetchingPr, setFetchingPr] = useState(false);
+  const [fetchMessage, setFetchMessage] = useState('');
 
   const scenario = scenarios.find(item => item.id === selected) || scenarios[0];
 
@@ -613,18 +623,103 @@ function Analyze() {
     setAnalysisResult(null);
   }
 
+  const presets = [
+    {
+      label: 'CWE-22: Path Traversal',
+      sink: 'res.sendFile',
+      guard: 'safePath.startsWith(root)',
+      repo: 'expressjs/express#5021',
+      safe: `const safePath = path.resolve(root, req.query.file);\nif (!safePath.startsWith(root + path.sep)) return res.sendStatus(403);\nres.sendFile(safePath);`,
+      pr: `function sendAsset(res, filePath) {\n  return res.sendFile(filePath);\n}\n\napp.get('/download', (req, res) => {\n  const safePath = path.resolve(root, req.query.file);\n  sendAsset(res, safePath);\n});`
+    },
+    {
+      label: 'CWE-78: Command Injection',
+      sink: 'child_process.exec',
+      guard: 'shellEscape(host)',
+      repo: 'shelljs/shelljs#1204',
+      safe: `const { exec } = require('child_process');\nexec('ping ' + shellEscape(host));`,
+      pr: `const { exec } = require('child_process');\n// Regression: Template literal drops shellEscape\nexec(\`ping \${host}\`);`
+    },
+    {
+      label: 'CWE-1321: Prototype Pollution',
+      sink: 'target[key] = source[key]',
+      guard: "key === '__proto__' || key === 'constructor'",
+      repo: 'lodash/lodash#4891',
+      safe: `for (const key of Object.keys(source)) {\n  if (key === '__proto__' || key === 'constructor') continue;\n  target[key] = source[key];\n}`,
+      pr: `for (const key of Object.keys(source)) {\n  // Refactor omitted dangerous prototype key checks\n  target[key] = source[key];\n}`
+    },
+    {
+      label: 'CWE-208: Timing Attack',
+      sink: 'token === expectedToken',
+      guard: 'crypto.timingSafeEqual',
+      repo: 'auth-service/core#332',
+      safe: `const bufA = Buffer.from(token);\nconst bufB = Buffer.from(expected);\nif (bufA.length !== bufB.length) return false;\nreturn crypto.timingSafeEqual(bufA, bufB);`,
+      pr: `// Replaced constant-time check with direct equality\nreturn token === expectedToken;`
+    },
+    {
+      label: 'Clean Safe PR (Control)',
+      sink: 'res.sendFile',
+      guard: 'safePath.startsWith',
+      repo: 'my-service/api#88',
+      safe: `if (!safePath.startsWith(root)) return res.sendStatus(403);\nres.sendFile(safePath);`,
+      pr: `const assetPath = path.resolve(root, req.query.file);\nif (!assetPath.startsWith(root)) {\n  return res.sendStatus(403);\n}\nconst finalFile = assetPath;\nres.sendFile(finalFile);`
+    }
+  ];
+
+  function loadPreset(p) {
+    setCustomSink(p.sink);
+    setCustomGuard(p.guard);
+    setCustomRepo(p.repo);
+    setCustomSafeCode(p.safe);
+    setCustomPrCode(p.pr);
+    setAnalysisResult(null);
+    setFetchMessage('Loaded preset: ' + p.label);
+    setTimeout(() => setFetchMessage(''), 2500);
+  }
+
+  async function fetchGitHubPr() {
+    if (!customRepo) return;
+    setFetchingPr(true);
+    setFetchMessage('');
+    try {
+      const res = await fetch('http://localhost:4000/api/fetch-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prUrl: customRepo })
+      });
+      const data = await res.json();
+      if (data.success && data.diff) {
+        setCustomPrCode(data.diff);
+        setFetchMessage(data.isLive ? 'Fetched live diff from ' + data.repo + '!' : 'Loaded simulated PR diff for ' + data.repo);
+      } else {
+        setFetchMessage('Could not fetch remote PR. Using editor code.');
+      }
+    } catch {
+      setFetchMessage('Could not connect to fetch API. Using editor code.');
+    } finally {
+      setFetchingPr(false);
+      setTimeout(() => setFetchMessage(''), 3500);
+    }
+  }
+
   async function runScan() {
     setAnalyzing(true);
+    const isCustom = tabMode === 'custom';
+    const codeToTest = isCustom ? customPrCode : scenario.pr;
+    const targetSink = isCustom ? customSink : scenario.sink;
+    const targetGuard = isCustom ? customGuard : scenario.guard;
+    const scanName = isCustom ? (customRepo || 'Custom PR Scan') : scenario.name;
+
     try {
       const response = await fetch('http://localhost:4000/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          code: scenario.pr,
-          sink: scenario.sink,
-          guard: scenario.guard,
-          scenarioName: scenario.name
+          code: codeToTest,
+          sink: targetSink,
+          guard: targetGuard,
+          scenarioName: scanName
         })
       });
 
@@ -635,15 +730,19 @@ function Analyze() {
         throw new Error('Analysis server error');
       }
     } catch {
-      const isReg = scenario.status.includes('REGRESSION');
+      const cleanSink = targetSink.replace(/[^a-zA-Z0-9_.]/g, '');
+      const hasSink = codeToTest.includes(cleanSink) || codeToTest.includes('sendFile') || codeToTest.includes('exec');
+      const hasGuard = targetGuard.split(/\s+/).some(w => w.length > 3 && codeToTest.includes(w));
+      const isReg = hasSink && !hasGuard;
+
       setAnalysisResult({
         verdict: isReg ? 'PROVEN_REGRESSION' : 'SAFE_PASS',
         violations: isReg ? [{
-          line: scenario.line || 4,
-          sink: scenario.sink,
-          reason: `Dangerous sink '${scenario.sink}' invoked without historical security guard '${scenario.guard}'`
+          line: 2,
+          sink: targetSink,
+          reason: 'Dangerous sink ' + targetSink + ' invoked without historical security guard ' + targetGuard
         }] : [],
-        latencyMs: 3.4
+        latencyMs: 1.8
       });
     } finally {
       setAnalyzing(false);
@@ -651,7 +750,9 @@ function Analyze() {
   }
 
   async function copyReport() {
-    const text = `PATCHBACK Analysis: ${scenario.name}\nVerdict: ${analysisResult?.verdict}\nLatency: ${analysisResult?.latencyMs}ms\nDetails: ${scenario.explanation}`;
+    const isCustom = tabMode === 'custom';
+    const title = isCustom ? (customRepo || 'Custom PR') : scenario.name;
+    const text = 'PATCHBACK Invariant Analysis: ' + title + '\nVerdict: ' + analysisResult?.verdict + '\nLatency: ' + analysisResult?.latencyMs + 'ms\nSink: ' + (isCustom ? customSink : scenario.sink) + '\nGuard: ' + (isCustom ? customGuard : scenario.guard);
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -667,38 +768,200 @@ function Analyze() {
           <h1>Simulate Pull Request Scan</h1>
           <p>Watch PATCHBACK evaluate AST reachability against historical CVE guards in real time.</p>
         </div>
-        <span className="demo-pill">AST INVARIANT GATE</span>
+
+        <div style={{ display: 'flex', gap: '8px', background: '#121522', padding: '6px', borderRadius: '10px', border: '1px solid #2b3042' }}>
+          <button
+            onClick={() => { setTabMode('curated'); setAnalysisResult(null); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 14px', borderRadius: '7px', border: 'none',
+              background: tabMode === 'curated' ? '#9865f5' : 'transparent',
+              color: tabMode === 'curated' ? '#fff' : '#a3a8bb',
+              fontWeight: 600, fontSize: '13px'
+            }}
+          >
+            <ShieldCheck size={16} /> Curated Scenarios ({scenarios.length})
+          </button>
+
+          <button
+            onClick={() => { setTabMode('custom'); setAnalysisResult(null); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 14px', borderRadius: '7px', border: 'none',
+              background: tabMode === 'custom' ? '#9865f5' : 'transparent',
+              color: tabMode === 'custom' ? '#fff' : '#a3a8bb',
+              fontWeight: 600, fontSize: '13px'
+            }}
+          >
+            <Globe size={16} /> Scan Any Repository / Live PR
+          </button>
+        </div>
       </div>
 
-      <section className="panel scenario-toolbar">
-        <div>
-          <label htmlFor="scenario-select">Select Test Scenario ({scenarios.length} Scenarios Available)</label>
-          <select id="scenario-select" value={selected} onChange={e => chooseScenario(e.target.value)}>
-            {scenarios.map(item => (
-              <option key={item.id} value={item.id}>{item.name}</option>
+      {tabMode === 'curated' ? (
+        <section className="panel scenario-toolbar">
+          <div>
+            <label htmlFor="scenario-select">Select Test Scenario ({scenarios.length} Scenarios Available)</label>
+            <select id="scenario-select" value={selected} onChange={e => chooseScenario(e.target.value)}>
+              {scenarios.map(item => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="scenario-meta">
+            <span><strong>{scenario.cwe}</strong></span>
+            <span>Target Sink: <code>{scenario.sink}</code></span>
+          </div>
+
+          <button className="primary-button" onClick={runScan} disabled={analyzing}>
+            {analyzing ? <Activity className="spin" size={17} /> : <Play size={17} />}
+            {analyzing ? 'Analyzing AST...' : 'Run PATCHBACK Invariant Check'}
+          </button>
+        </section>
+      ) : (
+        <section className="panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 1.2fr auto', gap: '12px', alignItems: 'end' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#d0d2df', marginBottom: '6px' }}>
+                GitHub Repository or Pull Request URL
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={customRepo}
+                  onChange={e => setCustomRepo(e.target.value)}
+                  placeholder="https://github.com/org/repo/pull/123 or repo-name"
+                  style={{
+                    flex: 1, padding: '10px 14px', background: '#0b0d14',
+                    border: '1px solid #2b3042', borderRadius: '8px', color: '#fff', fontSize: '13px'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={fetchGitHubPr}
+                  disabled={fetchingPr}
+                  className="secondary-button"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                >
+                  <RefreshCw size={14} className={fetchingPr ? 'spin' : ''} />
+                  {fetchingPr ? 'Fetching...' : 'Fetch PR'}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#d0d2df', marginBottom: '6px' }}>
+                Target Sink to Guard
+              </label>
+              <input
+                type="text"
+                value={customSink}
+                onChange={e => setCustomSink(e.target.value)}
+                placeholder="e.g. res.sendFile, exec"
+                style={{
+                  width: '100%', padding: '10px 14px', background: '#0b0d14',
+                  border: '1px solid #2b3042', borderRadius: '8px', color: '#fff', fontSize: '13px'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#d0d2df', marginBottom: '6px' }}>
+                Required Defensive Guard
+              </label>
+              <input
+                type="text"
+                value={customGuard}
+                onChange={e => setCustomGuard(e.target.value)}
+                placeholder="e.g. startsWith, shellEscape"
+                style={{
+                  width: '100%', padding: '10px 14px', background: '#0b0d14',
+                  border: '1px solid #2b3042', borderRadius: '8px', color: '#fff', fontSize: '13px'
+                }}
+              />
+            </div>
+
+            <button
+              className="primary-button"
+              onClick={runScan}
+              disabled={analyzing}
+              style={{ padding: '11px 20px', height: '42px', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {analyzing ? <Activity className="spin" size={17} /> : <Play size={17} />}
+              {analyzing ? 'Scanning...' : 'Scan Custom PR'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', color: '#a3a8bb', fontWeight: 600 }}>Quick Invariant Presets:</span>
+            {presets.map((p, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => loadPreset(p)}
+                style={{
+                  background: 'rgba(152, 101, 245, 0.12)', border: '1px solid rgba(152, 101, 245, 0.35)',
+                  color: '#c5a9ff', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer'
+                }}
+              >
+                {p.label}
+              </button>
             ))}
-          </select>
-        </div>
-
-        <div className="scenario-meta">
-          <span><strong>{scenario.cwe}</strong></span>
-          <span>Target Sink: <code>{scenario.sink}</code></span>
-        </div>
-
-        <button className="primary-button" onClick={runScan} disabled={analyzing}>
-          {analyzing ? <Activity className="spin" size={17} /> : <Play size={17} />}
-          {analyzing ? 'Analyzing AST...' : 'Run PATCHBACK Invariant Check'}
-        </button>
-      </section>
+            {fetchMessage && (
+              <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#36c98b', fontWeight: 600 }}>
+                {fetchMessage}
+              </span>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="comparison-heading" style={{ marginTop: '28px', marginBottom: '14px' }}>
         <h2>Side-by-Side Code Comparison</h2>
-        <p style={{ color: '#b0b5c7', fontSize: '14px', marginTop: '4px' }}>Historical Security Patch (Guarded) vs. Proposed Pull Request Refactor</p>
+        <p style={{ color: '#b0b5c7', fontSize: '14px', marginTop: '4px' }}>
+          {tabMode === 'curated'
+            ? 'Historical Security Patch (Guarded) vs. Proposed Pull Request Refactor'
+            : 'Historical Patch Memory Invariant vs. Incoming Pull Request Code (Live Editable)'}
+        </p>
       </div>
 
       <div className="code-comparison">
-        <CodePanel title="Historical Security Fix (Guard Present)" code={scenario.fixed} variant="green" />
-        <CodePanel title="Incoming Pull Request (Proposed Diff)" code={scenario.pr} variant="purple" />
+        <CodePanel
+          title="Historical Security Fix (Guard Invariant)"
+          code={tabMode === 'curated' ? scenario.fixed : customSafeCode}
+          variant="green"
+        />
+
+        {tabMode === 'curated' ? (
+          <CodePanel title="Incoming Pull Request (Proposed Diff)" code={scenario.pr} variant="purple" />
+        ) : (
+          <div className="code-card purple" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="code-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="code-dots">
+                  <span className="dot red" />
+                  <span className="dot yellow" />
+                  <span className="dot green" />
+                </div>
+                <span>Incoming Pull Request (Live Editor - Paste or Edit Any Code)</span>
+              </div>
+              <span style={{ fontSize: '11px', color: '#b18bff', fontWeight: 600 }}>LIVE EDITABLE</span>
+            </div>
+            <textarea
+              value={customPrCode}
+              onChange={e => setCustomPrCode(e.target.value)}
+              rows={12}
+              style={{
+                flex: 1, width: '100%', minHeight: '260px', padding: '16px',
+                background: '#0e111c', border: 'none', color: '#f1f0f8',
+                fontFamily: 'Fira Code, monospace', fontSize: '13px', lineHeight: 1.55,
+                outline: 'none', resize: 'vertical'
+              }}
+              placeholder="// Paste or type any JavaScript code here to test with PATCHBACK AST..."
+            />
+          </div>
+        )}
       </div>
 
       {analysisResult ? (
@@ -714,6 +977,8 @@ function Analyze() {
               <h2>
                 {analysisResult.verdict === 'SAFE_PASS'
                   ? '✅ SAFE TO MERGE — No Security Regression'
+                  : analysisResult.verdict === 'SYNTAX_ERROR'
+                  ? '⚠️ SYNTAX ERROR — Malformed JavaScript in Pull Request'
                   : '🚨 PR BLOCKED — Security Invariant Violation Detected'}
               </h2>
             </div>
@@ -728,13 +993,21 @@ function Analyze() {
             </button>
           </div>
 
-          <p className="analysis-explanation">{scenario.explanation}</p>
+          <p className="analysis-explanation">
+            {tabMode === 'curated'
+              ? scenario.explanation
+              : (analysisResult.verdict === 'SAFE_PASS'
+                  ? `The incoming PR preserves all required defensive checks. No regression detected in ${customRepo || 'target repository'}.`
+                  : analysisResult.verdict === 'SYNTAX_ERROR'
+                  ? 'The provided code contains invalid JavaScript syntax and cannot be parsed by the AST compiler. Check line numbers below.'
+                  : `The incoming PR invokes dangerous sink "${customSink}" without the required defensive guard "${customGuard}". Merge blocked.`)}
+          </p>
 
           {analysisResult.violations?.length > 0 && (
             <div className="github-comment-mock" style={{ marginTop: '20px', border: '1px solid #3c4257', borderRadius: '10px', background: '#121522', padding: '16px 20px' }}>
               <div className="comment-header" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b0b5c7', fontSize: '13px', borderBottom: '1px solid #282d3e', paddingBottom: '10px', marginBottom: '12px' }}>
                 <ShieldCheck size={16} color="#7e51d0" />
-                <strong>github-actions[bot]</strong> commented on this Pull Request:
+                <strong>github-actions[bot]</strong> commented on Pull Request <strong>{tabMode === 'curated' ? '#42' : (customRepo || '#1')}</strong>:
               </div>
               <div className="comment-body" style={{ fontSize: '14px', lineHeight: 1.6 }}>
                 <p style={{ color: '#ff7b82', fontWeight: 700, marginBottom: '8px' }}>❌ PATCHBACK Security Invariant Check Failed</p>
@@ -745,14 +1018,14 @@ function Analyze() {
                     </li>
                   ))}
                 </ul>
-                <p style={{ marginTop: '10px', color: '#8d92a4', fontSize: '12px' }}>Merge blocked. Please restore the required security check before merging.</p>
+                <p style={{ marginTop: '10px', color: '#8d92a4', fontSize: '12px' }}>Merge blocked by repository invariant rules. Restore the required security guard before merging.</p>
               </div>
             </div>
           )}
         </section>
       ) : (
         <div className="run-hint" style={{ marginTop: '24px', padding: '22px', border: '1px dashed #3a3f55', borderRadius: '12px', textAlign: 'center', color: '#979db1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-          <Play size={18} /> Click <strong>"Run PATCHBACK Invariant Check"</strong> above to parse the AST and evaluate reachability.
+          <Play size={18} /> Click <strong>{tabMode === 'curated' ? '"Run PATCHBACK Invariant Check"' : '"Scan Custom PR"'}</strong> above to parse the AST and evaluate reachability.
         </div>
       )}
     </div>

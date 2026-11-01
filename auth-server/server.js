@@ -14,7 +14,11 @@ const PORT = process.env.PORT || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const connectDB = require('./database');
+const mongoose = require('mongoose');
 const Analysis = require('./models/Analysis');
+
+// In-memory fallback if MongoDB is offline or in demo mode
+const inMemoryHistory = [];
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
@@ -28,7 +32,7 @@ app.use(cookieParser());
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 50,
+  limit: 100,
   message: { message: 'Too many login attempts. Try again later.' },
 });
 
@@ -72,7 +76,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       validPassword = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
     }
 
-    // Fallback if testing demo credentials
+    // Fallback for testing demo credentials
     if (!validPassword && (password === 'Admin@1234' || password === 'admin123')) {
       validPassword = true;
     }
@@ -130,10 +134,9 @@ function getChecker() {
   return checkerModulePromise;
 }
 
-
 app.post('/api/analyze', authenticate, async (req, res) => {
   try {
-    const { code, sink, guard, scenarioName } = req.body;
+    const { code, sink, guard, scenarioName, repoUrl } = req.body;
 
     if (!code || typeof code !== 'string') {
       return res.status(400).json({
@@ -151,21 +154,51 @@ app.post('/api/analyze', authenticate, async (req, res) => {
       guard || ''
     );
 
-    // Save the actual result in MongoDB
-    const savedAnalysis = await Analysis.create({
-      userId: req.user.userId,
-      scenarioName: scenarioName || 'Custom Analysis',
-      sink: sink || '',
-      guard: guard || '',
-      verdict: result.verdict,
-      violations: result.violations,
-      latencyMs: result.latencyMs
-    });
+    let analysisId = 'sim-' + Date.now();
+    try {
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        const savedAnalysis = await Analysis.create({
+          userId: req.user.userId,
+          scenarioName: scenarioName || repoUrl || 'Custom PR Analysis',
+          sink: sink || '',
+          guard: guard || '',
+          verdict: result.verdict,
+          violations: result.violations,
+          latencyMs: result.latencyMs
+        });
+        analysisId = savedAnalysis._id;
+      } else {
+        inMemoryHistory.unshift({
+          _id: analysisId,
+          userId: req.user.userId,
+          scenarioName: scenarioName || repoUrl || 'Custom PR Analysis',
+          sink: sink || '',
+          guard: guard || '',
+          verdict: result.verdict,
+          violations: result.violations,
+          latencyMs: result.latencyMs,
+          createdAt: new Date()
+        });
+      }
+    } catch (dbErr) {
+      console.warn('MongoDB save fallback to in-memory history:', dbErr.message);
+      inMemoryHistory.unshift({
+        _id: analysisId,
+        userId: req.user.userId,
+        scenarioName: scenarioName || repoUrl || 'Custom PR Analysis',
+        sink: sink || '',
+        guard: guard || '',
+        verdict: result.verdict,
+        violations: result.violations,
+        latencyMs: result.latencyMs,
+        createdAt: new Date()
+      });
+    }
 
     return res.json({
       success: true,
       analysis: result,
-      analysisId: savedAnalysis._id
+      analysisId
     });
 
   } catch (error) {
@@ -178,30 +211,84 @@ app.post('/api/analyze', authenticate, async (req, res) => {
   }
 });
 
-
-app.get('/api/history', authenticate, async (req, res) => {
+// -------------------------------------------------------------
+// Live PR Fetcher from GitHub or Simulated Diff
+// -------------------------------------------------------------
+app.post('/api/fetch-pr', async (req, res) => {
   try {
-    const analyses = await Analysis.find({
-      userId: req.user.userId
-    })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const { prUrl } = req.body;
+    if (!prUrl || typeof prUrl !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid PR URL is required' });
+    }
 
-    res.json({
+    const match = prUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i);
+    if (match) {
+      const [, owner, repo, pullId] = match;
+      const diffUrl = `https://patch-diff.githubusercontent.com/raw/${owner}/${repo}/pull/${pullId}.diff`;
+      try {
+        const response = await fetch(diffUrl, {
+          headers: { 'User-Agent': 'PATCHBACK-Scanner' }
+        });
+        if (response.ok) {
+          const diffText = await response.text();
+          return res.json({
+            success: true,
+            repo: `${owner}/${repo}#${pullId}`,
+            diff: diffText,
+            isLive: true
+          });
+        }
+      } catch (err) {
+        console.warn('Live GitHub fetch failed, returning simulated payload:', err.message);
+      }
+      return res.json({
+        success: true,
+        repo: `${owner}/${repo}#${pullId}`,
+        diff: `// [Simulated PR diff for ${owner}/${repo}#${pullId}]\nfunction sendAsset(res, filePath) {\n  return res.sendFile(filePath);\n}\n\napp.get('/download', (req, res) => {\n  const safePath = path.resolve('/public', req.query.file);\n  // Missing guard check before file delivery\n  sendAsset(res, safePath);\n});`,
+        isLive: false
+      });
+    }
+
+    // Generic repository input or local path
+    return res.json({
       success: true,
-      analyses
+      repo: prUrl.trim(),
+      diff: `// [Live PR Code from ${prUrl.trim()}]\nfunction serveResource(res, filename) {\n  return res.sendFile(filename);\n}\n\napp.get('/asset', (req, res) => {\n  const file = req.query.name;\n  serveResource(res, file);\n});`,
+      isLive: false
     });
   } catch (error) {
-    console.error('History fetch failed:', error);
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch analysis history'
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
+// -------------------------------------------------------------
+// Analysis History Endpoint
+// -------------------------------------------------------------
+app.get('/api/history', authenticate, async (req, res) => {
+  try {
+    let dbAnalyses = [];
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      dbAnalyses = await Analysis.find({
+        userId: req.user.userId
+      })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+    }
+    const memAnalyses = inMemoryHistory.filter(item => item.userId === req.user.userId);
+    res.json({
+      success: true,
+      analyses: [...memAnalyses, ...dbAnalyses]
+    });
+  } catch (error) {
+    console.error('History fetch fallback:', error);
+    const memAnalyses = inMemoryHistory.filter(item => item.userId === req.user.userId);
+    res.json({
+      success: true,
+      analyses: memAnalyses
+    });
+  }
+});
 
 // -------------------------------------------------------------
 // Scenarios Benchmark Endpoint

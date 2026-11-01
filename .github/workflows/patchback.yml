@@ -1,0 +1,39 @@
+name: "PATCHBACK Security Invariant Gate"
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+jobs:
+  verify-invariants:
+    name: "AST Invariant Dominance Gate"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout Pull Request Code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Set up Node.js runtime"
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: "Install Dependencies"
+        run: |
+          npm install
+          cd auth-server && npm install && cd ..
+          cd frontend && npm install && cd ..
+
+      - name: "Run Invariant Benchmark Suite (OWASP Top 10)"
+        run: |
+          npm run benchmark
+
+      - name: "Run PATCHBACK CLI Invariant Scanner"
+        run: |
+          node bin/patchback-cli.js --scenario 3
+          node bin/patchback-cli.js --scenario 6

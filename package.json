@@ -5,8 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "scan": "node bin/patchback-cli.js",
     "engine:test": "node engine/test-demo.js",
     "benchmark": "node pitch-and-benchmark/benchmark-runner.js",
+    "server": "cd auth-server && node server.js",
     "frontend:dev": "cd frontend && npm run dev",
     "frontend:install": "cd frontend && npm install"
   },
@@ -18,5 +20,9 @@
     "patchback"
   ],
   "author": "PATCHBACK Team (FET Hackathon)",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@babel/parser": "^7.26.9",
+    "@babel/traverse": "^7.26.9"
+  }
 }
